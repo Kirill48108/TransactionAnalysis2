@@ -1,9 +1,11 @@
-from src.utils import day_time_now, exchange_rate, get_price_stocks_snp500, max_five_transactions, user_transactions
-from typing import Union
-import pandas as pd
 import datetime
 from pathlib import Path
+from typing import Union
+
+import pandas as pd
 from dotenv import load_dotenv
+
+from src.utils import day_time_now, exchange_rate, get_price_stocks_snp500, max_five_transactions, user_transactions
 
 load_dotenv("../.env")
 

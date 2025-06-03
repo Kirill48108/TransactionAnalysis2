@@ -1,12 +1,12 @@
-import pytest
-from src.services import simple_search
 import json
-
-from typing import Any, Dict, List, Union
 import logging
-from src.logger import setup_logging
 from pathlib import Path
+from typing import Any, Dict, List, Union
 
+import pytest
+
+from src.logger import setup_logging
+from src.services import simple_search
 
 # @pytest.mark.parametrize("search_str, transactions", [{
 #             "id": 939719570,

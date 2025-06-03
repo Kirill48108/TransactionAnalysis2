@@ -1,7 +1,9 @@
-import pytest
-from src.views import website, user_transactions
 import json
 from datetime import datetime
+
+import pytest
+
+from src.views import user_transactions, website
 
 
 def test_website1():

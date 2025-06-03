@@ -1,10 +1,12 @@
-from src.logger import setup_logging
 import json
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
+
 import pandas as pd
+
+from src.logger import setup_logging
 
 current_dir = Path(__file__).parent.parent.resolve()
 dir_transactions_excel = current_dir / "data" / "operations.xlsx"
@@ -96,7 +98,7 @@ def spending_by_category(transactions: pd.DataFrame, category: str, date: Option
     start_date = date - timedelta(days=90)
     end_date = date
 
-    #Further filter transactions by date range
+    # Further filter transactions by date range
     recent_transactions = filtered_transactions[
         (pd.to_datetime(filtered_transactions["Дата операции"], dayfirst=True) >= start_date)
         & (pd.to_datetime(filtered_transactions["Дата операции"], dayfirst=True) <= end_date)
