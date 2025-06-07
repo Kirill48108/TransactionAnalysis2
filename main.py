@@ -1,28 +1,40 @@
-from typing import Any
+import json
+import logging
 
-import pandas as pd
+from src.utils import currency_rates, for_each_card, get_price_stock, greetings, top_five_transaction, read_excel_transactions
+from src.views import filter_by_date
 
-from src.reports import dir_transactions_excel, spending_by_category
-from src.services import simple_search, transactions
-from src.views import website
+logger = logging.getLogger("utils.log")
+file_handler = logging.FileHandler("main.log", "w")
+file_formatter = logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
+file_handler.setFormatter(file_formatter)
+logger.addHandler(file_handler)
+logger.setLevel(logging.INFO)
+
+data_frame = read_excel_transactions("data/operations.xlsx")
 
 
-def main() -> Any:
-    """Функция для запуска всего проекта"""
-    print("Функция для запуска всего проекта")
-
-
-if __name__ == "__main__":
-    print("\nГЛАВНАЯ\n")
-
-    data_time = pd.Timestamp("29-09-2018 00:00:00")
-    result1, result2, result3, result4, result5 = website(data_time)
-    print("После вызова website")
-    print(result1, result2, result3, result4, result5)
-
-    print("\nСервисы.Простой поиск\n")
-    search_str = input("Введите строку поиска: ")
-    simple_search(search_str, transactions)
-
-    print("\nОТЧЕТЫ\n")
-    spending_by_category(pd.read_excel(dir_transactions_excel), "Фастфуд", "11.11.2019")
+def main(date: str, df_transactions, stocks: list, currency: list):
+    """Функция создающая JSON ответ для страницы главная"""
+    logger.info("Начало работы главной функции (main)")
+    final_list = filter_by_date(date, df_transactions)
+    greeting = greetings()
+    cards = for_each_card(final_list)
+    top_trans = top_five_transaction(final_list)
+    stocks_prices = get_price_stock(stocks)
+    currency_r = currency_rates(currency)
+    logger.info("Создание JSON ответа")
+    result = [{
+            "greeting": greeting,
+            "cards": cards,
+            "top_transactions": top_trans,
+            "currency_rates": currency_r,
+            "stock_prices": stocks_prices,
+        }]
+    date_json = json.dumps(
+        result,
+        indent=4,
+        ensure_ascii=False,
+    )
+    logger.info("Завершение работы главной функции (main)")
+    return date_json

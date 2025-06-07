@@ -1,140 +1,134 @@
 import datetime
-from pathlib import Path
-
+import logging
+import os
 import pandas as pd
 import requests
 from dotenv import load_dotenv
+import json
+import urllib.request
+load_dotenv()
+API_KEY_CUR = os.getenv("API_KEY_CUR")
 
-from src.config import API_KEY_exchange, API_KEY_stocks
+SP_500_API_KEY = os.getenv("SP_500_API_KEY")
 
-# Загрузка переменных окружения
-load_dotenv("../.env")
+logger = logging.getLogger("utils.log")
+file_handler = logging.FileHandler("utils.log", "w")
+file_formatter = logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
+file_handler.setFormatter(file_formatter)
+logger.addHandler(file_handler)
+logger.setLevel(logging.INFO)
 
-# Определение текущего каталога
-current_dir = Path(__file__).parent.parent.resolve()
-dir_transactions_excel = current_dir / "data" / "operations.xlsx"
-print(dir_transactions_excel)
-
-
-def day_time_now():
-    """
-    Функция, которая приветствует в зависимости от текущего времени суток.
-    Возвращает строку приветствия в зависимости от времени.
-    """
-    current_date_time = datetime.datetime.now()
-    hour = current_date_time.hour
-
-    if 0 <= hour < 6 or 22 <= hour <= 23:
-        return "Доброй ночи"
-    elif 17 <= hour <= 22:
-        return "Добрый вечер"
-    elif 7 <= hour <= 11:
-        return "Доброе утро"
-    else:
-        return "Добрый день"
-
-
-def user_transactions(data_time: pd.Timestamp) -> pd.DataFrame:
-    """
-    Функция, которая извлекает детали транзакций для каждой карты:
-    - последние 4 цифры карты
-    - общие расходы
-    - кэшбек (1 рубль за каждые 100 рублей расхода)
-    """
-    df = pd.read_excel(dir_transactions_excel)
-
-    # Фильтрация транзакций за указанный месяц
-    # df_filtered = df.loc[
-    #     (pd.to_datetime(df['Дата операции'], dayfirst=True) <= data_time) &
-    #     (pd.to_datetime(df['Дата операции'], dayfirst=True) >= data_time.replace(day=1))
-    # ]
-    df_filtered = df.loc[
-        (pd.to_datetime(df["Дата операции"], dayfirst=True) <= data_time)
-        & (pd.to_datetime(df["Дата операции"], dayfirst=True) >= data_time.replace(day=1))
-    ].copy()
-    # Расчет кэшбека и группировка по номеру карты
-    # df_filtered['кэшбек'] = df_filtered['Сумма операции с округлением'] // 100
-    df_filtered.loc[:, "кэшбек"] = df_filtered["Сумма операции с округлением"] // 100
-    sales_by_card = df_filtered.groupby("Номер карты")[["Сумма операции с округлением", "кэшбек"]].sum()
-    sorted_sales = sales_by_card.sort_values(by="Сумма операции с округлением", ascending=False)
-
-    print(sorted_sales)
-    return sorted_sales
-
-
-def max_five_transactions(data_time: pd.Timestamp) -> pd.DataFrame:
-    """
-    Функция, которая извлекает 5 лучших транзакций по сумме платежа.
-    """
-    df = pd.read_excel(dir_transactions_excel)
-
-    # # Фильтрация транзакций за указанный месяц
-    # df_filtered = df.loc[
-    #     (pd.to_datetime(df['Дата операции'], dayfirst=True) <= data_time) &
-    #     (pd.to_datetime(df['Дата операции'], dayfirst=True) >= data_time.replace(day=1))
-    # ]
-    # Создаем копию для фильтрации
-    filtered_df = df.copy()
-
-    # Фильтрация транзакций за указанный месяц
-    filtered_df = filtered_df.loc[
-        (pd.to_datetime(filtered_df["Дата операции"], format="%d.%m.%Y %H:%M:%S", dayfirst=True) <= data_time)
-        & (
-            pd.to_datetime(filtered_df["Дата операции"], format="%d.%m.%Y %H:%M:%S", dayfirst=True)
-            >= data_time.replace(day=1)
-        )
-    ]
-    # Сортировка и получение 5 лучших транзакций
-    top_transactions = filtered_df.sort_values(by="Сумма операции с округлением", ascending=False).head(5)
-    return top_transactions
-
-
-def exchange_rate() -> list:
-    """
-    Функция, которая извлекает курсы обмена для USD и EUR к RUB
-    путем вызова внешнего API.
-    """
-    currency_list = ["USD", "EUR"]
-    convert_to = "RUB"
-    new_currency_list = []
-
-    for currency in currency_list:
-        url = f"https://api.apilayer.com/currency_data/convert?to={convert_to}&from={currency}&amount=1"
-        headers = {"apikey": API_KEY_exchange}
-
-        response = requests.get(url, headers=headers)
-        # print("Response:", response.text)  # Отладочный вывод
-        result = response.json()
-        currency_value = result.get("result")
-
-        if currency_value is not None:
-            new_currency_list.append(currency_value)
-        else:
-            print("Ошибка: ключ 'result' не найден в ответе для:", currency)
-
-    return new_currency_list
-
-
-def get_price_stocks_snp500() -> list:
-    """
-    Функция, которая извлекает цены акций из списка S&P 500
-    путем вызова внешнего API.
-    """
-    stocks_list = ["AAPL", "AMZN", "GOOGL", "MSFT", "TSLA"]
-    price_stocks = []
-
-    for stock in stocks_list:
-        response = requests.get(f"https://api.twelvedata.com/price?symbol={stock}&apikey={API_KEY_stocks}")
-        dict_result = response.json()
-        price_element = dict_result.get("price")
-        price_stocks.append(price_element)
-
-    return price_stocks
-
+def read_excel_transactions(file_name: str) -> list[dict]:
+    """Функция, которая считывает данные из файла XLSX и преобразовывает в список словарей"""
+    df = pd.read_excel(file_name)
+    result = df.apply(
+        lambda row: {
+            "Дата платежа": row["Дата платежа"],
+            "Статус": row["Статус"],
+            "Сумма платежа": row["Сумма платежа"],
+            "Валюта платежа": row["Валюта платежа"],
+            "Категория": row["Категория"],
+            "Описание": row["Описание"],
+            "Номер карты": row["Номер карты"],
+        },
+        axis=1,
+    ).tolist()
+    return result
 
 if __name__ == "__main__":
-    print(day_time_now())
-    print(user_transactions(pd.to_datetime("29-09-2018 00:00:00", dayfirst=True)))
-    print(max_five_transactions(pd.to_datetime("29.09.2018", dayfirst=True)))
-    # print(exchange_rate())
-    # print(get_price_stocks_snp500())
+    transact_new = read_excel_transactions("data/operations.xlsx")
+
+
+def greetings():
+    """Функция приветствия"""
+
+    time_obj = datetime.datetime.now()
+    if 6 <= time_obj.hour <= 12:
+        return "Доброе утро"
+    elif 13 <= time_obj.hour <= 18:
+        return "Добрый день"
+    elif 19 <= time_obj.hour <= 23:
+        return "Добрый вечер"
+    else:
+        return "Доброй ночи"
+
+
+def for_each_card(my_list: list) -> list:
+    """Функция создания информации по каждой карте"""
+    logger.info("Начало работы функции (for_each_card)")
+    cards = {}
+    result = []
+    logger.info("Перебор транзакций")
+    for i in my_list:
+        if i["Номер карты"] == "nan" or type(i["Номер карты"]) is float:
+            continue
+        elif i["Сумма платежа"] == "nan":
+            continue
+        else:
+            if i["Номер карты"][1:] in cards:
+                cards[i["Номер карты"][1:]] += float(str(i["Сумма платежа"])[1:])
+            else:
+                cards[i["Номер карты"][1:]] = float(str(i["Сумма платежа"])[1:])
+    for k, v in cards.items():
+        result.append({"last_digits": k, "total_spent": round(v, 2), "cashback": round(v / 100, 2)})
+    logger.info("Завершение работы функции (for_each_card)")
+    return result
+
+
+def currency_rates(currency: list) -> list[dict]:
+    """Функция запроса курса валют"""
+    logger.info("Начало работы функции (currency_rates)")
+    api_key = API_KEY_CUR
+    result = []
+    for i in currency:
+        url = f"https://v6.exchangerate-api.com/v6/{api_key}/latest/{i}"
+        with urllib.request.urlopen(url) as response:
+            body_json = response.read()
+        body_dict = json.loads(body_json)
+        result.append({"currency": i, "rate": round(body_dict["conversion_rates"]["RUB"], 2)})
+
+    logger.info("Создание списка словарей для функции - currency_rates")
+
+    logger.info("Окончание работы функции - currency_rates")
+    return result
+
+
+def top_five_transaction(my_list: list) -> list:
+    """Функция для получения топ-5 транзакций по сумме платежа"""
+    logger.info("Начало работы функции (top_five_transaction)")
+    all_transactions = {}
+    result = []
+    logger.info("Перебор транзакций в функции (top_five_transaction)")
+    for i in my_list:
+        if i["Категория"] not in all_transactions and str(i["Сумма платежа"])[0:1] != "-":
+            if i["Категория"] != "Пополнения":
+                all_transactions[i["Категория"]] = float(str(i["Сумма платежа"])[1:])
+        elif (
+                i["Категория"] in all_transactions
+                and float(str(i["Сумма платежа"])[1:]) > all_transactions[i["Категория"]]
+        ):
+            all_transactions[i["Категория"]] = float(str(i["Сумма платежа"])[1:])
+    for i in my_list:
+        for k, v in all_transactions.items():
+            if k == i["Категория"] and v == float(str(i["Сумма платежа"])[1:]):
+                result.append({"date": i["Дата платежа"], "amount": v, "category": k, "description": i["Описание"]})
+    logger.info("Окончание работы функции (top_five_transaction)")
+
+    return result
+
+
+def get_price_stock(stocks: list) -> list:
+    """Функция для получения данных об акциях из списка S&P500"""
+    logger.info("Начало работы функции (get_price_stock)")
+    api_key = SP_500_API_KEY
+    stock_prices = []
+    logger.info("Функция обрабатывает данные транзакций.")
+    for stock in stocks:
+        logger.info("Перебор акций в списке 'stocks' в функции (get_price_stock)")
+        url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={stock}&apikey={api_key}"
+        response = requests.get(url, timeout=5, allow_redirects=False)
+        result = response.json()
+
+        stock_prices.append({"stock": stock, "price": round(float(result["Global Quote"]["05. price"]), 2)})
+    logger.info("Функция get_price_stock успешно завершила свою работу")
+    return stock_prices

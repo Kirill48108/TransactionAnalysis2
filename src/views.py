@@ -1,55 +1,31 @@
+import logging
+from datetime import datetime
 import datetime
-from pathlib import Path
-from typing import Union
 
-import pandas as pd
-from dotenv import load_dotenv
-
-from src.utils import day_time_now, exchange_rate, get_price_stocks_snp500, max_five_transactions, user_transactions
-
-load_dotenv("../.env")
-
-current_dir = Path(__file__).parent.parent.resolve()
-
-dir_transactions_excel = current_dir / "data" / "operations.xlsx"
-print(dir_transactions_excel)
+logger = logging.getLogger("views.log")
+file_handler = logging.FileHandler("views.log", "w")
+file_formatter = logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
+file_handler.setFormatter(file_formatter)
+logger.addHandler(file_handler)
+logger.setLevel(logging.INFO)
 
 
-def website(data_time: datetime) -> Union[list, dict]:
-    """
-    Главная функция, принимающую на вход строку с датой и временем в формате
-    YYYY-MM-DD HH:MM:SS и возвращающую JSON-ответ со следующими данными:
-
-    Приветствие в формате "???", где ??? — «Доброе утро» / «Добрый день» / «Добрый вечер» / «Доброй ночи» в зависимости
-    от текущего времени.
-
-    По каждой карте:
-    последние 4 цифры карты;
-    общая сумма расходов;
-    кешбэк (1 рубль на каждые 100 рублей).
-
-    Топ-5 транзакций по сумме платежа.
-
-    Курс валют.
-
-    Стоимость акций из S&P500.
-    """
-    print(f"Входные данные: {data_time}")
-    result1 = day_time_now()
-    result2 = user_transactions(data_time)
-    result3 = max_five_transactions(data_time)
-    result4 = exchange_rate()
-    result5 = get_price_stocks_snp500()
-
-    return result1, result2, result3, result4, result5
-
-
-if __name__ == "__main__":
-
-    print(f"{day_time_now()}")
-    # print(user_transactions(pd.to_datetime('29-09-2018 00:00:00', dayfirst=True)))
-    data_time = pd.Timestamp("29-09-2018 00:00:00")  # Пример даты
-    result = user_transactions(data_time)
-    print("Результат транзакций:")
-    print(result)
-    print("Пять максимальных транзакций:")
+def filter_by_date(date: str, my_list: list) -> list:
+    """Функция фильтрующая данные по заданной дате"""
+    list_by_date = []
+    logger.info("Начало работы функции (filter_by_date)")
+    if date == "":
+        return list_by_date
+    year, month, day = int(date[0:4]), int(date[5:7]), int(date[8:10])
+    date_obj = datetime.datetime(year, month, day)
+    for i in my_list:
+        if i["Дата платежа"] == "nan" or type(i["Дата платежа"]) is float:
+            continue
+        elif (
+                date_obj
+                >= datetime.datetime.strptime(str(i["Дата платежа"]), "%d.%m.%Y")
+                >= date_obj - datetime.timedelta(days=day - 1)
+        ):
+            list_by_date.append(i)
+    logger.info("Конец работы функции (filter_by_date)")
+    return list_by_date

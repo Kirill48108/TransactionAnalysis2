@@ -1,20 +1,23 @@
-import json
-from datetime import datetime
-
+from src.utils import read_excel_transactions
+from src.views import filter_by_date
 import pytest
+my_list = read_excel_transactions("data/operations.xlsx")
+empty_list = []
 
-from src.views import user_transactions, website
+
+def test_filter_by_date():
+    """Тестирования функции фильтра от заданной даты"""
+    assert filter_by_date("2021.11.01", my_list) == [
+        {'Дата платежа': '01.11.2021', 'Статус': 'OK', 'Сумма платежа': -228.0, 'Валюта платежа': 'RUB',
+         'Категория': 'Супермаркеты', 'Описание': 'Колхоз', 'Номер карты': '*4556'},
+        {'Дата платежа': '01.11.2021', 'Статус': 'OK', 'Сумма платежа': -110.0, 'Валюта платежа': 'RUB',
+         'Категория': 'Фастфуд', 'Описание': 'Mouse Tail', 'Номер карты': '*4556'},
+        {'Дата платежа': '01.11.2021', 'Статус': 'OK', 'Сумма платежа': -525.0, 'Валюта платежа': 'RUB',
+         'Категория': 'Одежда и обувь', 'Описание': 'WILDBERRIES', 'Номер карты': '*4556'}]
 
 
-def test_website1():
-    """Тестирование правильности работы функции"""
-    data_time = datetime.now()
-    result = website(data_time)
-
-    # Проверь, что результат имеет ожидаемый тип и значения
-    assert isinstance(result, tuple)
-    assert len(result) == 5
-
-    # Добавь дополнительные проверки для каждого из result1, result2 и т.д.
-    # Например, если ожидается, что первый элемент - строка:
-    assert isinstance(result[0], str)
+def test_filter_by_date_emp_att():
+    """Тестирования функции фильтра от заданной даты с пустыми атрибутами"""
+    assert filter_by_date("", my_list) == []
+    assert filter_by_date("2021.11.01", my_list)
+    assert filter_by_date("", empty_list) == []
