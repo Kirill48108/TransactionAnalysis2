@@ -1,26 +1,38 @@
-import json
-from typing import Any, Callable
+import logging
+from functools import wraps
+
+import pandas as pd
+
+from logging_config import setup_logging
+
+setup_logging()
+logger = logging.getLogger("my_log")
 
 
-def decorator_spending_by_category(func: Callable) -> Callable:
-    """Логирует результат функции в файл по умолчанию decorator_spending_by_category.json"""
+def decorator_record_file(file_name):
+    """
+    Декоратор, который записывает результат выполнения функции в JSON файл. Принимает на вход имя файла.
+    """
 
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
-        result = func(*args, **kwargs)
-        with open("spending_by_category.json", "w", encoding="utf-8") as f:
-            json.dump(result, f, ensure_ascii=False, indent=4)
-        return result
+    def wrapper(func):
+        @wraps(func)
+        def inner(*args, **kwargs):
 
-    return wrapper
+            df = func(*args, **kwargs)
 
+            logger.info("Проверка: являются ли данные датафреймом")
 
-def decorator_search(func: Callable) -> Callable:
-    """Логирует результат функции в файл по умолчанию decorator_search.json"""
+            if isinstance(df, pd.DataFrame):
 
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
-        result = func(*args, **kwargs)
-        with open("search.json", "w", encoding="utf-8") as f:
-            json.dump(result, f, ensure_ascii=False, indent=4)
-        return result
+                logger.info("Запись отчёта в файл")
+
+                df.to_json(file_name, orient="records", lines=True, force_ascii=False)
+
+            else:
+                logger.error("Данные не являются датафреймом. В файл записаны не будут")
+
+            return df
+
+        return inner
 
     return wrapper

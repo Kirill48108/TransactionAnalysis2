@@ -1,67 +1,25 @@
-import json
+from src.services import get_profitable_cashback_categories
 
 
-from src.utils import read_excel
-from src.services import simple_search
+def test_get_profitable_cashback_categories(operations_list_valid, result_cashback_categories):
+    result = get_profitable_cashback_categories(operations_list_valid, "2022", "04")
 
-my_list = read_excel("../data/operations.xlsx")
-empty_list = []
-
-
-def test_services_works():
-    """Тестирование функции простой поиск в обычных условиях"""
-    assert simple_search(my_list, "Ozon.ru") == json.dumps([
-        {
-            "Дата платежа": "31.12.2021",
-            "Статус": "OK",
-            "Сумма платежа": -564.0,
-            "Валюта платежа": "RUB",
-            "Категория": "Различные товары",
-            "Описание": "Ozon.ru",
-            "Номер карты": "*5091"
-        },
-        {
-            "Дата платежа": "20.12.2021",
-            "Статус": "OK",
-            "Сумма платежа": 421.0,
-            "Валюта платежа": "RUB",
-            "Категория": "Различные товары",
-            "Описание": "Ozon.ru",
-            "Номер карты": "*7197"
-        },
-        {
-            "Дата платежа": "14.12.2021",
-            "Статус": "OK",
-            "Сумма платежа": -421.0,
-            "Валюта платежа": "RUB",
-            "Категория": "Различные товары",
-            "Описание": "Ozon.ru",
-            "Номер карты": "*7197"
-        },
-        {
-            "Дата платежа": "21.10.2021",
-            "Статус": "OK",
-            "Сумма платежа": -119.0,
-            "Валюта платежа": "RUB",
-            "Категория": "Различные товары",
-            "Описание": "Ozon.ru",
-            "Номер карты": "*7197"
-        },
-        {
-            "Дата платежа": "04.10.2020",
-            "Статус": "OK",
-            "Сумма платежа": -750.0,
-            "Валюта платежа": "RUB",
-            "Категория": "Различные товары",
-            "Описание": "Ozon.ru",
-            "Номер карты": "*7197"
-        }
-    ], indent=4,
-        ensure_ascii=False, )
+    assert result == result_cashback_categories
 
 
-def test_services_empty_attribute():
-    """Тестирование функции простой поиск, с пустыми атрибутами """
-    assert simple_search(empty_list, "Ozon.ru") == json.dumps([], indent=4,
-                                                              ensure_ascii=False, )
-    assert simple_search(my_list, "") == []
+def test_get_profitable_cashback_categories_invalid_date(operations_list_valid):
+    result = get_profitable_cashback_categories(operations_list_valid, "2026", "04")
+
+    assert result == "{}"
+
+
+def test_get_profitable_cashback_categories_invalid_date_2(operations_list_valid):
+    result = get_profitable_cashback_categories(operations_list_valid, "2022", "111")
+
+    assert result == "{}"
+
+
+def test_get_profitable_cashback_categories_invalid_data(operations_list_valid):
+    result = get_profitable_cashback_categories([], "2022", "111")
+
+    assert result == "{}"

@@ -1,39 +1,66 @@
-import logging
 import json
-from src.decorators import decorator_search
+import logging
+import re
+from datetime import datetime
+
+from logging_config import setup_logging
+
+setup_logging()
+logger = logging.getLogger("my_log")
 
 
-logger = logging.getLogger("services.log")
-file_handler = logging.FileHandler("services.log", "w")
-file_formatter = logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
-file_handler.setFormatter(file_formatter)
-logger.addHandler(file_handler)
-logger.setLevel(logging.INFO)
+def get_profitable_cashback_categories(data: list, year: str, month: str) -> str:
+    """
+    На вход функции поступают данные для анализа, год и месяц.
+    На выходе — JSON с анализом, сколько на каждой категории можно заработать кешбэка в указанном месяце года,
+    в формате:
+    {"Категория 1": 1000,
+    "Категория 2": 2000,
+    "Категория 3": 500}
+    """
+    filtered_data = []
+    result = {}
 
+    pattern_year = re.compile(r"\d{4}")
+    pattern_month = re.compile(r"\d{2}")
 
+    logger.info("Проверка на корректность введенных данных")
 
-@decorator_search
-def simple_search(my_list: list, string_search: str):
-    """Функция поиска по переданной строке"""
-    result = []
-    logger.info("Начало работы функции (simple_search)")
-    for i in my_list:
-        if string_search == '':
-            return result
-        elif (
-                i["Описание"] == "nan"
-                or type(i["Описание"]) is float
-                or i["Категория"] == "nan"
-                or type(i["Категория"]) is float
-        ):
-            continue
-        elif string_search in i["Описание"] or string_search in i["Категория"]:
-            result.append(i)
+    if isinstance(data, list) and pattern_year.fullmatch(year) and pattern_month.fullmatch(month):
+        if data and 12 >= int(month) > 0:
 
-    logger.info("Конец работы функции (simple_search)")
-    data_json = json.dumps(result,
-                           indent=4,
-                           ensure_ascii=False,
-                           )
+            for x in data:
+                date_obj = datetime.strptime(x["Дата операции"], "%d.%m.%Y %H:%M:%S")
+                year_part = date_obj.strftime("%Y")
+                month_part = date_obj.strftime("%m")
 
-    return data_json
+                logger.info("Проверка операции на совпадение месяца и года для поиска")
+
+                if year_part == year and month_part == month:
+
+                    logger.info("Добавление подходящих операций в новый список")
+
+                    filtered_data.append(x)
+                    category = x["Категория"]
+                    amount = x["Сумма операции"]
+
+                    if category not in result and amount < 0:
+                        if category != "Переводы":
+                            result[category] = 0.0
+
+                            logger.info("Формирование результата с категориями и подсчет кэшбека")
+
+                            result[category] += abs(amount * 0.01)
+
+                else:
+                    logger.warning("Дата операции отличается от запроса")
+
+    else:
+        logger.error("Передан неверный тип данных")
+
+    logger.info("Приводим результат к формату json")
+
+    filtered_result = dict(sorted(result.items(), key=lambda value: value[1], reverse=True))
+    parsed_result = json.dumps(filtered_result, ensure_ascii=False)
+
+    return parsed_result

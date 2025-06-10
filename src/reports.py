@@ -1,77 +1,70 @@
-import datetime
-import json
 import logging
-from typing import Any, Callable, Optional
+from datetime import datetime
+from typing import Optional
 
 import pandas as pd
 
-from src.decorators import decorator_spending_by_category
+from logging_config import setup_logging
+from settings import REPORTS_PATH
+from src.decorators import decorator_record_file
 
-logger = logging.getLogger("report.log")
-file_handler = logging.FileHandler("report.log", "w")
-file_formatter = logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
-file_handler.setFormatter(file_formatter)
-logger.addHandler(file_handler)
-logger.setLevel(logging.INFO)
+setup_logging()
+logger = logging.getLogger("my_log")
 
 
-def log_spending_by_category(filename: Any) -> Callable:
-    """Логирует результат функции в указанный файл"""
+@decorator_record_file(REPORTS_PATH)
+def spending_by_category(transactions: pd.DataFrame, category: str, date: Optional[str] = None) -> pd.DataFrame:
+    """
+    Функция принимает на вход датафрейм с транзакциями, название категории, и опциональную дату в формате ДД.ММ.ГГГГ.
+    Если дата не передана, то берется текущая дата.
+    И возвращает траты по заданной категории за последние три месяца (от переданной даты).
+    """
+    try:
+        if not date:
+            stop_date = datetime.now()
 
-    def decorator(func: Callable) -> Callable:
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            result = func(*args, **kwargs).to_dict("records")
-            with open(filename, "w") as f:
-                json.dump(result, f, indent=4)
-            return result
+        else:
+            stop_date = datetime.strptime(date, "%d.%m.%Y")
 
-        return wrapper
+        logger.info("Определение даты, начиная с которой будут взяты операции для подсчета трат по категориям")
 
-    return decorator
+        start_date = stop_date - pd.Timedelta(days=90)
 
+        logger.info("Проверка на наличие необходимых столбцов в датафрейм")
 
-@decorator_spending_by_category
-def spending_by_category(transactions: pd.DataFrame, category: str, date: Optional[str] = None):
-    """Функция возвращающая траты за последние 3 месяца по заданной категории"""
-    logger.info("Начало работы")
-    list_by_category = []
-    final_list = []
+        required_columns = ["Дата платежа", "Категория", "Сумма операции"]
+        for column in required_columns:
 
-    if date is None:
-        logger.info("Обработка условия на отсутствие")
-        date_start = datetime.datetime.now() - datetime.timedelta(days=90)
-        for i in transactions:
-            if i["Категория"] == category:
-                list_by_category.append(i)
-        for i in list_by_category:
-            if i["Дата платежа"] == "nan" or type(i["Дата платежа"]) is float:
-                continue
-            elif (
-                    date_start
-                    <= datetime.datetime.strptime(str(i["Дата платежа"]), "%d.%m.%Y")
-                    <= date_start + datetime.timedelta(days=90)
-            ):
-                final_list.append(i["Сумма платежа"])
-        return final_list
-    else:
-        logger.info("Обработка условия на создание")
-        day, month, year = date.split(".")
-        date_obj = datetime.datetime(int(year), int(month), int(day))
-        date_start = date_obj - datetime.timedelta(days=90)
+            if column not in transactions.columns:
+                logger.error(f"Отсутствует необходимый столбец: {column}")
 
-        for i in transactions:
-            if i["Категория"] == category:
-                list_by_category.append(i)
+                return pd.DataFrame()
 
-        for i in list_by_category:
-            if i["Дата платежа"] == "nan" or type(i["Дата платежа"]) is float:
-                continue
-            else:
-                day_, month_, year_ = i["Дата платежа"].split(".")
-                date_obj_ = datetime.datetime(int(year), int(month), int(day))
-                if date_start <= date_obj_ <= date_start + datetime.timedelta(days=90):
-                    final_list.append(i["Сумма платежа"])
-        logger.info("Завершение работы функции")
-        data_json = json.dumps(final_list, indent=4, ensure_ascii=False, )
+        logger.info("Преобразование дат операций в объект datatime")
 
-        return data_json
+        transactions["Дата платежа"] = pd.to_datetime(transactions["Дата платежа"], format="%d.%m.%Y")
+
+        logger.info("Формирование списка операций для формирования отчета")
+
+        filtered_transactions = transactions[
+            (transactions["Дата платежа"] >= start_date)
+            & (transactions["Дата платежа"] <= stop_date)
+            & (transactions["Категория"] == category)
+            & (transactions["Сумма операции"] < 0)
+        ]
+
+        logger.info("Инициализация отчета")
+
+        total_spending = filtered_transactions["Сумма операции"].abs().sum()
+
+        result = pd.DataFrame({"Категория": [category], "Сумма трат": [total_spending]})
+
+    except ValueError as ve:
+        logger.error(f"Ошибка значения: {ve}")
+        return pd.DataFrame()
+
+    except Exception as e:
+        logger.error(f"Произошла ошибка: {e}")
+        return pd.DataFrame()
+
+    return result

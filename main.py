@@ -1,40 +1,53 @@
 import json
 import logging
+from datetime import datetime
 
-from src.utils import currency_rates, for_each_card, get_price_stock, greetings, top_five_transaction, read_excel_transactions
-from src.views import filter_by_date
+from logging_config import setup_logging
+from settings import EXCEL_PATH, JSON_PATH
+from src.external_api import get_currency_rate, get_stock_price
+from src.reports import spending_by_category
+from src.services import get_profitable_cashback_categories
+from src.utils import get_json_currencies, get_json_stocks, get_xlsx
+from src.views import get_card_info, get_top_transactions, greetings, sort_by_date
 
-logger = logging.getLogger("utils.log")
-file_handler = logging.FileHandler("main.log", "w")
-file_formatter = logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
-file_handler.setFormatter(file_formatter)
-logger.addHandler(file_handler)
-logger.setLevel(logging.INFO)
-
-data_frame = read_excel_transactions("data/operations.xlsx")
+setup_logging()
+logger = logging.getLogger("external_api")
 
 
-def main(date: str, df_transactions, stocks: list, currency: list):
-    """Функция создающая JSON ответ для страницы главная"""
-    logger.info("Начало работы главной функции (main)")
-    final_list = filter_by_date(date, df_transactions)
-    greeting = greetings()
-    cards = for_each_card(final_list)
-    top_trans = top_five_transaction(final_list)
-    stocks_prices = get_price_stock(stocks)
-    currency_r = currency_rates(currency)
-    logger.info("Создание JSON ответа")
-    result = [{
-            "greeting": greeting,
-            "cards": cards,
-            "top_transactions": top_trans,
-            "currency_rates": currency_r,
-            "stock_prices": stocks_prices,
-        }]
-    date_json = json.dumps(
-        result,
-        indent=4,
-        ensure_ascii=False,
-    )
-    logger.info("Завершение работы главной функции (main)")
-    return date_json
+def views_main(date: str) -> str:
+    """
+    Функция, принимающая на вход строку с датой и временем
+    в формате YYYY-MM-DD HH:MM:SS и возвращающая JSON-ответ
+    """
+    actual_date = datetime.strptime(date, "%Y-%m-%d %H:%M:%S")
+    correct_date = actual_date.strftime("%d.%m.%Y")
+    correct_time = actual_date.strftime("%H:%M:%S")
+
+    sort_operations_list = sort_by_date(operations_list, correct_date)
+
+    greeting = greetings(correct_time)
+    cards = get_card_info(sort_operations_list)
+    top_transactions = get_top_transactions(sort_operations_list)
+    currency_rates = [get_currency_rate(cur) for cur in get_json_currencies(JSON_PATH)]
+    stock_prices = [get_stock_price(st) for st in get_json_stocks(JSON_PATH)]
+
+    result = {
+        "greeting": greeting,
+        "cards": cards,
+        "top_transactions": top_transactions,
+        "currency_rates": currency_rates,
+        "stock_prices": stock_prices,
+    }
+
+    parsed_result = json.dumps(result, ensure_ascii=False)
+
+    return parsed_result
+
+
+if __name__ == "__main__":
+    operations_list, df = get_xlsx(EXCEL_PATH)
+    my_date = (datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
+    json_main = views_main(my_date)
+    services_main = get_profitable_cashback_categories(operations_list, "2022", "04")
+
+    spending_by_category(df, "Рестораны", "25.02.2024")

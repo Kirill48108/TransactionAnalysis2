@@ -1,86 +1,98 @@
-from dotenv import load_dotenv
-from unittest.mock import Mock, patch
-import os
-from src.utils import currency_rates, for_each_card, get_price_stock, greetings, top_five_transaction,read_excel_transactions
+from unittest.mock import mock_open, patch
+
+import pandas as pd
+import pytest
+
+from src.utils import get_json_currencies, get_json_stocks, get_xlsx
 
 
-load_dotenv()
-API_KEY_CUR = os.getenv("API_KEY_CUR")
-my_list = read_excel_transactions("data/operations.xlsx")
-empty_list = []
+@patch("pandas.read_excel")
+def test_get_xlsx(mock_read_excel, operations_from_excel, operations_list_valid):
+    mock_read_excel.return_value = pd.DataFrame(operations_from_excel)
+    result = get_xlsx("valid/path/to/file")
+
+    assert operations_list_valid in result
 
 
-def test_greetings():
-    """Тестирование функции приветствия"""
-    assert greetings() == "Добрый день"
+def test_get_xlsx_empty_path():
+    result = get_xlsx("")
+
+    assert [] in result
 
 
-def test_for_each_card():
-    """Тестирование функции создающей информацию по каждой карте, в обычном режиме"""
-    assert for_each_card(my_list) == [{'last_digits': '7197', 'total_spent': 2504514.54, 'cashback': 25045.15},
-                                      {'last_digits': '5091', 'total_spent': 18216.84, 'cashback': 182.17},
-                                      {'last_digits': '4556', 'total_spent': 2103029.17, 'cashback': 21030.29},
-                                      {'last_digits': '1112', 'total_spent': 46207.08, 'cashback': 462.07},
-                                      {'last_digits': '5507', 'total_spent': 84000.0, 'cashback': 840.0},
-                                      {'last_digits': '6002', 'total_spent': 69200.0, 'cashback': 692.0},
-                                      {'last_digits': '5441', 'total_spent': 470854.8, 'cashback': 4708.55}]
+@patch("pandas.read_excel")
+def test_get_xlsx_empty_file(mock_read_excel):
+    mock_read_excel.return_value = pd.DataFrame()
+    result = get_xlsx("valid/path/to/file")
+
+    assert [] in result
 
 
-def test_for_each_card_emp_att():
-    """Тестирование функции создающей информацию по каждой карте, с пустым списком"""
-    assert for_each_card(empty_list) == []
+def test_get_xlsx_invalid_path():
+    result = get_xlsx("invalid/path/to/file")
+
+    assert [] in result
 
 
-def test_top_five_transaction():
-    """Тестирование функции для получения топ-5 транзакций по сумме платежа, в обычном режиме"""
-    assert top_five_transaction(my_list) == [
-        {'date': '01.09.2021', 'amount': 5990.0, 'category': 'Каршеринг', 'description': 'Ситидрайв'},
-        {'date': '20.05.2021', 'amount': 8626.0, 'category': 'Бонусы', 'description': 'Компенсация покупки'},
-        {'date': '14.05.2019', 'amount': 42965.94, 'category': 'Другое', 'description': 'ГУП ВЦКП ЖХ'},
-        {'date': '30.04.2019', 'amount': 6100.0, 'category': 'Зарплата',
-         'description': 'Пополнение. ООО "ФОРТУНА". Зарплата'},
-        {'date': '23.04.2019', 'amount': 4518.0, 'category': 'Сервис', 'description': 'Kopirovalniy Centr'},
-        {'date': '15.04.2019', 'amount': 6100.0, 'category': 'Зарплата',
-         'description': 'Пополнение. ООО "ФОРТУНА". Аванс'},
-        {'date': '21.03.2019', 'amount': 190044.51, 'category': 'Переводы',
-         'description': 'Перевод Кредитная карта. ТП 10.2 RUR'},
-        {'date': '28.08.2018', 'amount': 32999.0, 'category': 'Различные товары', 'description': 'SPb Trk Atmosfera'},
-        {'date': '16.08.2018', 'amount': 3100.0, 'category': 'Транспорт', 'description': 'RigasStarptautiska autoos'},
-        {'date': '19.04.2018', 'amount': 4292.8, 'category': 'Ж/д билеты', 'description': 'РЖД'},
-        {'date': '10.03.2018', 'amount': 900.0, 'category': 'Кино', 'description': 'Каро Фильм'},
-        {'date': '06.03.2018', 'amount': 10420.07, 'category': 'Частные услуги', 'description': 'YM*Login.Skolkovo'},
-        {'date': '30.01.2018', 'amount': 2789.68, 'category': 'Супермаркеты', 'description': 'Перекрёсток'}]
+@patch(
+    "builtins.open",
+    new_callable=mock_open,
+    read_data="""{"user_currencies": ["USD", "EUR"], "user_stocks": ["AAPL", "AMZN"]}""",
+)
+def test_get_json_currencies(mock_file):
+    result = get_json_currencies("some/path")
+
+    assert result == ["USD", "EUR"]
+    mock_file.assert_called_with("some/path", "r", encoding="utf-8")
 
 
-def test_top_five_transaction_emp_att():
-    """Тестирование функции для получения топ-5 транзакций по сумме платежа, с пустым списком"""
-    assert top_five_transaction(empty_list) == []
+@patch("builtins.open", new_callable=mock_open, read_data="")
+def test_get_json_currencies_invalid(mock_file):
+    with pytest.raises(Exception) as exc_info:
+        get_json_currencies("some/path")
+
+    assert "Ошибка при чтении файла:" in str(exc_info.value)
 
 
-@patch('requests.get')
-def test_currency_rates(mock_get):
-    """Тестирование функции вывода курса валют"""
-    mock_response_usd = Mock()
-    mock_response_usd.json.return_value = {"conversion_rates": {"RUB": 88.34}}
-    mock_response_eur = Mock()
-    mock_response_eur.json.return_value = {"conversion_rates": {"RUB": 97.8}}
-    mock_get.side_effect = [mock_response_usd, mock_response_eur]
+@patch(
+    "builtins.open",
+    new_callable=mock_open,
+    read_data="""{"key": ["value_1", "value_2"], "key_2": ["value_3", "value_4"]}""",
+)
+def test_get_json_currencies_not_key(mock_file):
+    result = get_json_currencies("some/path")
 
-    result = currency_rates(['USD', 'EUR'])
-    expected = [{"currency": "USD", "rate": 88.34}, {"currency": "EUR", "rate": 97.8}]
-    assert result == expected
+    assert result == []
 
 
-@patch("requests.get")
-def test_fetch_stock_prices(mock_get):
-    """Тестирование функции получения данных об акциях из списка S&P500"""
+def test_get_json_currencies_not_path():
+    with pytest.raises(Exception) as exc_info:
+        get_json_currencies("")
 
-    mock_get.return_value.json.return_value = {"Global Quote": {"05. price": 210.00}}
+    assert "Ошибка при чтении файла:" in str(exc_info.value)
 
-    list_stocks = ["AAPL"]
 
-    result = get_price_stock(list_stocks)
-    expected = [
-        {"stock": "AAPL", "price": 210.00},
-    ]
-    assert result == expected
+@patch(
+    "builtins.open",
+    new_callable=mock_open,
+    read_data="""{"user_currencies": ["USD", "EUR"], "user_stocks": ["AAPL", "AMZN"]}""",
+)
+def test_get_json_stocks(mock_file):
+    result = get_json_stocks("some/path")
+
+    assert result == ["AAPL", "AMZN"]
+
+
+def test_get_json_stocks_not_path():
+    with pytest.raises(Exception) as exc_info:
+        get_json_stocks("")
+
+    assert "Ошибка при чтении файла:" in str(exc_info.value)
+
+
+@patch("builtins.open", new_callable=mock_open, read_data="////")
+def test_get_json_stocks_invalid(mock_file):
+    with pytest.raises(ValueError) as exc_info:
+        get_json_stocks("some/path")
+
+    assert "Ошибка при чтении файла:" in str(exc_info.value)
