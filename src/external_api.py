@@ -6,9 +6,7 @@ from typing import Dict, Union
 import requests
 from dotenv import load_dotenv
 
-from logging_config import setup_logging
 
-setup_logging()
 logger = logging.getLogger("my_log")
 
 load_dotenv()
@@ -24,9 +22,16 @@ def get_currency_rate(currency: str, amount: int = 1) -> Dict[str, Union[str, fl
     """
     logger.info("Определяем url и др. необходимые объекты")
 
+    import requests
+
     url = f"https://api.apilayer.com/exchangerates_data/convert?to=RUB&from={currency}&amount={amount}"
-    headers = {"apikey": CURRENCY_API_KEY}
-    response = requests.get(url, headers=headers)
+    payload = {}
+    headers = {
+        "apikey": "CURRENCY_API_KEY"
+    }
+
+    response = requests.request("GET", url, headers=headers, data=payload)
+
     status_code = response.status_code
 
     logger.info("Проверяем статус код")
