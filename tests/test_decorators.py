@@ -35,7 +35,6 @@ from src.decorators import decorator_record_file
 # Импортируйте ваш декоратор
 
 
-
 def test_write_to_file_decorator():
     # Создаем мок для функции open
 
