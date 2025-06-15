@@ -5,6 +5,7 @@ from typing import Dict, Union
 
 import requests
 from dotenv import load_dotenv
+import logging_config
 
 
 logger = logging.getLogger("my_log")
@@ -12,6 +13,9 @@ logger = logging.getLogger("my_log")
 load_dotenv()
 CURRENCY_API_KEY = os.getenv("CURRENCY_API_KEY")
 STOCK_API_KEY = os.getenv("STOCK_API_KEY")
+
+
+
 
 
 def get_currency_rate(currency: str, amount: int = 1) -> Dict[str, Union[str, float]]:
@@ -27,7 +31,7 @@ def get_currency_rate(currency: str, amount: int = 1) -> Dict[str, Union[str, fl
     url = f"https://api.apilayer.com/exchangerates_data/convert?to=RUB&from={currency}&amount={amount}"
     payload = {}
     headers = {
-        "apikey": "CURRENCY_API_KEY"
+        "apikey": CURRENCY_API_KEY
     }
 
     response = requests.request("GET", url, headers=headers, data=payload)
@@ -114,6 +118,6 @@ def get_stock_price(stock: str) -> Dict[str, Union[str, float]]:
 
     else:
 
-        logger.error(f"Статус код не равен 200. Возможная ошибка: {response.reason}")
+        logger.error(f"Статус код не равен 200. Возможная ошибка: {response.text}")
 
-        raise Exception(f"Запрос не был успешным. Возможная причина: {response.reason}")
+        raise Exception(f"Запрос не был успешным. Возможная причина: {response.text}")
